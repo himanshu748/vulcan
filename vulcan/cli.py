@@ -1,0 +1,73 @@
+"""CLI: vulcan index / chat / ask / bench."""
+from __future__ import annotations
+
+from pathlib import Path
+
+import typer
+from rich.console import Console
+from rich.panel import Panel
+
+from . import bench as bench_mod
+from .agent import Agent
+from .config import load
+from .llm import LLM
+from .rag import Index
+
+app = typer.Typer(no_args_is_help=True, add_completion=False)
+console = Console()
+
+
+@app.command()
+def index(path: Path = typer.Argument(..., exists=True), name: str = "default") -> None:
+    """Index a codebase for semantic search."""
+    cfg = load()
+    idx = Index(cfg, LLM(cfg), name)
+    with console.status(f"Indexing {path} ..."):
+        n = idx.build(path.resolve())
+    console.print(f"[green]Indexed {n} chunks from {path}[/green]")
+
+
+@app.command()
+def ask(question: str, root: Path = Path("."), name: str = "default") -> None:
+    """One-shot agent run against an indexed codebase."""
+    cfg = load()
+    agent = Agent(cfg, root.resolve(), name)
+
+    def show(step: dict) -> None:
+        if "tool" in step:
+            console.print(f"[dim]→ {step['tool']} {step.get('args', {})}[/dim]")
+
+    answer = agent.run(question, on_step=show)
+    console.print(Panel(answer, title="Vulcan", border_style="cyan"))
+
+
+@app.command()
+def chat(root: Path = Path("."), name: str = "default") -> None:
+    """Interactive multi-turn session."""
+    cfg = load()
+    agent = Agent(cfg, root.resolve(), name)
+    console.print(f"[cyan]Vulcan[/cyan] on {cfg.base_url} · model {cfg.model} · ctrl-d to exit")
+    while True:
+        try:
+            question = console.input("[bold]you>[/bold] ")
+        except EOFError:
+            break
+        if not question.strip():
+            continue
+        answer = agent.run(question, on_step=lambda s: console.print(f"[dim]→ {s.get('tool', 'final')}[/dim]"))
+        console.print(Panel(answer, border_style="cyan"))
+
+
+@app.command()
+def bench(label: str = "local", repeats: int = 3) -> None:
+    """Measure TTFT and generation speed on the current backend."""
+    cfg = load()
+    console.print(f"Benchmarking {cfg.model} at {cfg.base_url} ...")
+    results = bench_mod.run(cfg, label, repeats)
+    for name, run in results["runs"].items():
+        console.print(f"  {name:7s} ttft={run['ttft_s_median']}s  speed={run['chunks_per_s_median']} chunks/s")
+    console.print(f"[green]Saved bench-results/{label}.json[/green]")
+
+
+if __name__ == "__main__":
+    app()
