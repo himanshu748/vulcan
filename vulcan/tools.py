@@ -24,6 +24,7 @@ def read_file(root: Path, path: str, start: int = 1, end: int | None = None) -> 
     if not target.is_file():
         return f"ERROR: no such file: {path}"
     lines = target.read_text(errors="ignore").splitlines()
+    start = max(start, 1)
     end = end or min(len(lines), start + 200)
     body = "\n".join(f"{i}\t{l}" for i, l in enumerate(lines[start - 1 : end], start))
     return _clip(body)
@@ -38,6 +39,8 @@ def list_dir(root: Path, path: str = ".") -> str:
 
 
 def grep(root: Path, pattern: str, glob: str = "**/*") -> str:
+    if glob in {"*", ".", ""}:
+        glob = "**/*"
     out: list[str] = []
     for p in root.glob(glob):
         if p.is_file() and ".git" not in p.parts:

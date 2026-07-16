@@ -23,6 +23,8 @@ You work in a loop. On each turn reply with EXACTLY ONE JSON object, nothing els
 or, when you have the answer:
   {"thought": "...", "final": "<answer for the user, cite files as path:line>"}
 
+Strategy: start with search_code, it is almost always the fastest route. Answer as soon as you have enough evidence; do not keep exploring.
+
 Tools:
 - search_code {"query": str}            semantic search over the indexed codebase
 - read_file   {"path": str, "start": int, "end": int}
