@@ -10,6 +10,7 @@ import json
 import platform
 import statistics
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .config import Config
@@ -50,6 +51,99 @@ def run(cfg: Config, label: str, repeats: int = 3, out_dir: Path | None = None) 
     out_dir.mkdir(exist_ok=True)
     out_path = out_dir / f"{label}.json"
     out_path.write_text(json.dumps(results, indent=2))
+    return results
+
+
+def run_concurrency(
+    cfg: Config,
+    label: str,
+    levels: tuple[int, ...] = (1, 2, 4, 8),
+    out_dir: Path | None = None,
+) -> dict:
+    """Aggregate throughput as concurrent requests scale.
+
+    Single-stream tokens/sec understates a GPU: an agent fleet issues many
+    ReAct steps at once, and vLLM batches them. This is the axis that shows
+    whether the Radeon is saturated at concurrency 1 or has headroom.
+    """
+    llm = LLM(cfg)
+    prompt = PROMPTS["medium"]
+    results: dict = {
+        "label": label,
+        "base_url": cfg.base_url,
+        "model": cfg.model,
+        "platform": platform.platform(),
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "axis": "concurrency",
+        "runs": {},
+    }
+    for n in levels:
+        start = time.perf_counter()
+        with ThreadPoolExecutor(max_workers=n) as pool:
+            futures = [
+                pool.submit(llm.chat, [{"role": "user", "content": prompt}], True)
+                for _ in range(n)
+            ]
+            outs = [f.result() for f in futures]
+        wall = time.perf_counter() - start
+        total_chunks = sum(o.completion_tokens for o in outs)
+        results["runs"][f"concurrency_{n}"] = {
+            "requests": n,
+            "wall_s": round(wall, 2),
+            "aggregate_chunks_per_s": round(total_chunks / wall, 1) if wall > 0 else None,
+            "per_request_chunks_per_s": round(total_chunks / wall / n, 1) if wall > 0 else None,
+            "ttft_s_median": round(statistics.median([o.ttft_s for o in outs if o.ttft_s]), 3)
+            if any(o.ttft_s for o in outs)
+            else None,
+        }
+    out_dir = out_dir or Path("bench-results")
+    out_dir.mkdir(exist_ok=True)
+    (out_dir / f"{label}.json").write_text(json.dumps(results, indent=2))
+    return results
+
+
+def run_prefill(
+    cfg: Config,
+    label: str,
+    word_counts: tuple[int, ...] = (128, 512, 2048, 8192),
+    out_dir: Path | None = None,
+) -> dict:
+    """Time-to-first-token against input length, i.e. prefill throughput.
+
+    A codebase agent stuffs retrieved chunks into context, so prefill cost is
+    the latency the user actually feels, not decode speed.
+    """
+    llm = LLM(cfg)
+    filler = (
+        "def handler(request, context):\n"
+        "    result = validate(request)\n"
+        "    return dispatch(result, context)\n"
+    ).split()
+    results: dict = {
+        "label": label,
+        "base_url": cfg.base_url,
+        "model": cfg.model,
+        "platform": platform.platform(),
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "axis": "prefill",
+        "runs": {},
+    }
+    for n_words in word_counts:
+        body = " ".join(filler[i % len(filler)] for i in range(n_words))
+        prompt = f"Here is code:\n{body}\nReply with the single word OK."
+        ttfts = []
+        for _ in range(3):
+            r = llm.chat([{"role": "user", "content": prompt}], stream=True)
+            if r.ttft_s:
+                ttfts.append(r.ttft_s)
+        results["runs"][f"prefill_{n_words}w"] = {
+            "input_words": n_words,
+            "ttft_s_median": round(statistics.median(ttfts), 3) if ttfts else None,
+            "repeats": 3,
+        }
+    out_dir = out_dir or Path("bench-results")
+    out_dir.mkdir(exist_ok=True)
+    (out_dir / f"{label}.json").write_text(json.dumps(results, indent=2))
     return results
 
 
