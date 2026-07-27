@@ -17,8 +17,16 @@ guesswork:
   quantization sweep and the demo recording all have to fit inside 5 hours.
 - **Failed launches cost nothing.** Balance held at 5 across four failed
   attempts.
-- **Launch rate limit is 3 per 10 minutes per IP**
-  (`template_launch_rate_limited`). Do not burn these on smoke tests.
+- **Two launch rate limits per IP**, both returning
+  `template_launch_rate_limited`: **3 per 10 minutes** and **5 per hour**.
+  The hourly one is the painful one, its `retry_after` is ~16 minutes. Do not
+  burn launches on smoke tests; each failed boot still counts against both.
+- **Boot reliability is not guaranteed.** `Qwen/Qwen3-8B` booted and ran for
+  an hour without trouble. `Qwen/Qwen3-4B-Instruct-2507` loaded its weights
+  (7.67 GiB) and then died twice during or just after `torch.compile`, with
+  the instance reaped and container logs emptied, so no stack trace survives.
+  Suspected platform instability during the announced maintenance rather than
+  a model problem. Prefer the known-good 8B config when credits are tight.
 - The platform is showing **"System maintenance is in progress"** and credit
   redemption is disabled, which is the most likely cause of the hydrate
   failures below.
