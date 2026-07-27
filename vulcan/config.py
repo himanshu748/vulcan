@@ -19,6 +19,14 @@ class Config:
     data_dir: Path = field(default_factory=lambda: Path(os.getenv("VULCAN_DATA_DIR", "~/.vulcan")).expanduser())
     max_steps: int = int(os.getenv("VULCAN_MAX_STEPS", "12"))
     temperature: float = float(os.getenv("VULCAN_TEMPERATURE", "0.2"))
+    # Unset means "send nothing", because backends that don't understand
+    # chat_template_kwargs reject the request outright. Set it only against
+    # vLLM serving a Qwen3 model: "false" there cuts agent-step latency ~3.5x.
+    enable_thinking: bool | None = field(
+        default_factory=lambda: {"true": True, "false": False}.get(
+            os.getenv("VULCAN_ENABLE_THINKING", "").lower()
+        )
+    )
 
     def __post_init__(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)

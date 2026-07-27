@@ -34,6 +34,8 @@ class LLM:
             "temperature": self.cfg.temperature,
             "stream": stream,
         }
+        if self.cfg.enable_thinking is not None:
+            payload["chat_template_kwargs"] = {"enable_thinking": self.cfg.enable_thinking}
         start = time.perf_counter()
         if not stream:
             r = self._client.post("/chat/completions", json=payload)
