@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 
 from vulcan import bench, tools
+from vulcan.config import Config
+from vulcan.llm import ChatResult
 
 
 def test_read_file_blocks_escape(tmp_path: Path):
@@ -20,6 +22,35 @@ def test_write_and_read_roundtrip(tmp_path: Path):
 def test_grep(tmp_path: Path):
     (tmp_path / "x.py").write_text("needle = 1\n")
     assert "x.py:1" in tools.grep(tmp_path, "needle")
+
+
+class _StubLLM:
+    """Returns a fixed-size streamed response without touching a backend."""
+
+    def __init__(self, cfg):
+        self.cfg = cfg
+
+    def chat(self, messages, stream=False):
+        return ChatResult(text="x", prompt_tokens=0, completion_tokens=10, ttft_s=0.1, total_s=1.1)
+
+
+def test_run_concurrency_schema(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(bench, "LLM", _StubLLM)
+    out = bench.run_concurrency(Config(), "t", levels=(1, 2), out_dir=tmp_path)
+    assert set(out["runs"]) == {"concurrency_1", "concurrency_2"}
+    two = out["runs"]["concurrency_2"]
+    assert two["requests"] == 2
+    # 2 requests x 10 chunks, so aggregate must exceed per-request
+    assert two["aggregate_chunks_per_s"] > two["per_request_chunks_per_s"]
+    assert json.loads((tmp_path / "t.json").read_text())["axis"] == "concurrency"
+
+
+def test_run_prefill_schema(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(bench, "LLM", _StubLLM)
+    out = bench.run_prefill(Config(), "p", word_counts=(8, 16), out_dir=tmp_path)
+    assert set(out["runs"]) == {"prefill_8w", "prefill_16w"}
+    assert out["runs"]["prefill_8w"]["input_words"] == 8
+    assert json.loads((tmp_path / "p.json").read_text())["axis"] == "prefill"
 
 
 def test_bench_compare(tmp_path: Path):

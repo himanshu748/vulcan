@@ -99,7 +99,72 @@ mismatch is disclosed here.
 
 ### 4.3 Results
 
-<!-- filled from: vulcan bench-compare bench-results/<baseline>.json bench-results/<candidate>.json -->
+All four tables below regenerate from committed JSON with `vulcan bench-compare`.
+
+#### Decode, single stream
+
+`vulcan bench-compare bench-results/ollama-m4air-qwen3-4b.json bench-results/radeon-vllm-qwen3-8b-nothink.json`
+
+| case | laptop 4B ttft (s) | radeon 8B ttft (s) | laptop chunks/s | radeon chunks/s | speedup |
+|---|---|---|---|---|---|
+| short | 0.2 | 0.306 | 32.3 | 24.2 | 0.75x |
+| medium | 0.225 | 0.292 | 20.2 | 24.0 | 1.19x |
+| long | 0.853 | 0.422 | 15.2 | 23.9 | 1.57x |
+
+The Radeon loses the short prompt and wins the long one, while carrying twice
+the parameters. The reason is visible in the shape: laptop throughput decays
+as the prompt grows (32.3 to 15.2) whereas the Radeon holds flat (24.2 to
+23.9). Long-prompt TTFT halves, 0.853s to 0.422s, and that figure still has
+the proxy round-trip inside it.
+
+#### Concurrency, the decisive axis
+
+`vulcan bench-compare bench-results/ollama-m4air-concurrency.json bench-results/radeon-vllm-concurrency.json`
+
+| concurrent | laptop ttft (s) | radeon ttft (s) | laptop chunks/s | radeon chunks/s | speedup |
+|---|---|---|---|---|---|
+| 1 | 4.359 | 1.486 | 28.4 | 23.5 | 0.83x |
+| 2 | 42.212 | 1.248 | 20.0 | 42.9 | 2.15x |
+| 4 | n/a | 0.553 | n/a | 87.0 | n/a |
+| 8 | n/a | 0.411 | n/a | 179.2 | n/a |
+
+Read the two curves rather than any single cell:
+
+- **Radeon**: 23.5 to 179.2 chunks/s across an 8x load increase, a **7.63x
+  scaling factor, 95% efficiency**. Per-request rate barely moves (23.5 to
+  22.4). Median TTFT *improves* 3.6x. Wall clock for the whole batch stays
+  around 57s whether it is serving 1 request or 8.
+- **Laptop**: adding a single extra request *reduces* aggregate throughput to
+  0.70x and pushes TTFT from 4.36s to 42.21s. Levels above 2 were not run
+  because the curve had already inverted.
+
+At two concurrent requests the Radeon answers in 1.2s where the laptop takes
+42.2s, a **34x** difference in the latency a user actually waits. This is the
+real argument for the GPU, and it is invisible to any single-stream benchmark.
+
+#### Prefill, the context budget
+
+| input words | radeon ttft (s) |
+|---|---|
+| 128 | 0.804 (cold start) |
+| 512 | 0.316 |
+| 2048 | 0.399 |
+| 8192 | 2.091 |
+
+Context is close to free up to ~2048 words, then 4x more context costs 5x the
+TTFT. That is a direct instruction to the RAG layer: keep retrieved context
+under about 2000 words and TTFT stays under half a second.
+
+#### Thinking mode, a serving-config win
+
+| mode | deltas generated | wall clock | delta rate |
+|---|---|---|---|
+| thinking (Qwen3 default) | 4058 | 170.9s | 23.8/s |
+| `enable_thinking: false` | 1168 | 49.0s | 24.0/s |
+
+Identical generation rate. Thinking emits ~3.5x more tokens for the same
+task, so per-step latency falls by the same factor. Reproducible from the CLI
+with `VULCAN_ENABLE_THINKING=false`.
 
 ### 4.4 Remaining sweeps
 

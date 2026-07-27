@@ -154,15 +154,27 @@ def compare(baseline_path: Path, candidate_path: Path) -> str:
     """
     baseline = json.loads(Path(baseline_path).read_text())
     candidate = json.loads(Path(candidate_path).read_text())
+
+    def rate(run: dict) -> float | None:
+        # decode runs report a per-stream median; concurrency runs report an
+        # aggregate, and comparing those is the whole point of the axis.
+        return run.get("chunks_per_s_median") or run.get("aggregate_chunks_per_s")
+
+    # Union of both files in baseline order, so an axis with different keys
+    # (concurrency_1.., prefill_128w..) compares as cleanly as the prompts do.
+    names = list(baseline["runs"]) + [k for k in candidate["runs"] if k not in baseline["runs"]]
+    if set(names) >= set(PROMPTS):
+        names = [n for n in PROMPTS if n in names] + [n for n in names if n not in PROMPTS]
+
     lines = [
-        f"| prompt | {baseline['label']} ttft (s) | {candidate['label']} ttft (s) | "
-        f"{baseline['label']} tok/s | {candidate['label']} tok/s | speedup |",
+        f"| case | {baseline['label']} ttft (s) | {candidate['label']} ttft (s) | "
+        f"{baseline['label']} chunks/s | {candidate['label']} chunks/s | speedup |",
         "|---|---|---|---|---|---|",
     ]
-    for name in PROMPTS:
+    for name in names:
         b = baseline["runs"].get(name, {})
         c = candidate["runs"].get(name, {})
-        b_tps, c_tps = b.get("chunks_per_s_median"), c.get("chunks_per_s_median")
+        b_tps, c_tps = rate(b), rate(c)
         speedup = f"{c_tps / b_tps:.2f}x" if b_tps and c_tps else "n/a"
         lines.append(
             f"| {name} | {b.get('ttft_s_median', 'n/a')} | {c.get('ttft_s_median', 'n/a')} | "
