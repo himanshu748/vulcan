@@ -1,0 +1,25 @@
+{
+  "label": "demo-live",
+  "base_url": "https://radeon-global.anruicloud.com/spaces/u-8047-dc574cbf/8000/v1",
+  "model": "Qwen/Qwen3-8B",
+  "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+  "timestamp": "2026-07-27T16:04:09",
+  "axis": "concurrency",
+  "runs": {
+    "concurrency_1": {
+      "requests": 1,
+      "wall_s": 55.18,
+      "aggregate_chunks_per_s": 21.8,
+      "per_request_chunks_per_s": 21.8,
+      "ttft_s_median": 4.75
+    },
+    "concurrency_8": {
+      "requests": 8,
+      "wall_s": 64.4,
+      "aggregate_chunks_per_s": 157.7,
+      "per_request_chunks_per_s": 19.7,
+      "ttft_s_median": 1.423
+    }
+  },
+  "note": "Captured live during the demo video recording by the shipped CLI (`vulcan bench-concurrency --label demo-live --levels 1,8`), not by an ad-hoc client. It independently reproduces the headline scaling result: 21.8 to 157.7 aggregate chunks/s across an 8x load increase (7.23x, 90% efficiency) with median TTFT falling 4.75s to 1.423s. The separate radeon-vllm-concurrency.json run measured 7.63x on the same instance, so the effect is stable across runs and across two different clients. 'platform' records the client machine; generation ran on the Radeon GPU named in base_url."
+}
