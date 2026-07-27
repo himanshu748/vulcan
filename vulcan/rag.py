@@ -19,6 +19,16 @@ SOURCE_EXTS = {
     ".sh", ".sql", ".swift", ".kt",
 }
 SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "dist", "build", "__pycache__", ".next", "target"}
+
+
+def _venv_dirs(root: Path) -> set[Path]:
+    """Virtualenvs named anything other than venv/.venv.
+
+    Name matching alone silently indexes every package in site-packages,
+    which turns `vulcan index .` into a multi-thousand-file embedding job.
+    pyvenv.cfg is the definitive marker, so find those instead of guessing.
+    """
+    return {cfg.parent for cfg in root.rglob("pyvenv.cfg")}
 CHUNK_LINES = 60
 CHUNK_OVERLAP = 10
 EMBED_BATCH = 32
@@ -40,8 +50,11 @@ class Index:
         batch_texts: list[str] = []
         batch_meta: list[tuple[str, int, int]] = []
         count = 0
+        skip_roots = _venv_dirs(root)
         for path in sorted(root.rglob("*")):
             if any(part in SKIP_DIRS for part in path.parts):
+                continue
+            if any(p in skip_roots for p in path.parents):
                 continue
             if not path.is_file() or path.suffix not in SOURCE_EXTS:
                 continue

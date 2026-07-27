@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from vulcan import bench, tools
+from vulcan import bench, rag, tools
 from vulcan.config import Config
 from vulcan.llm import ChatResult
 
@@ -51,6 +51,14 @@ def test_run_prefill_schema(tmp_path: Path, monkeypatch):
     assert set(out["runs"]) == {"prefill_8w", "prefill_16w"}
     assert out["runs"]["prefill_8w"]["input_words"] == 8
     assert json.loads((tmp_path / "p.json").read_text())["axis"] == "prefill"
+
+
+def test_venv_dirs_detects_oddly_named_env(tmp_path: Path):
+    odd = tmp_path / ".myenv"
+    (odd / "lib").mkdir(parents=True)
+    (odd / "pyvenv.cfg").write_text("home = /usr/bin\n")
+    (tmp_path / "src").mkdir()
+    assert rag._venv_dirs(tmp_path) == {odd}
 
 
 def test_bench_compare(tmp_path: Path):
