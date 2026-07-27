@@ -24,9 +24,43 @@ user ── CLI (typer) ── Agent (ReAct loop, JSON tool protocol)
 - Persistent memory across sessions per project
 - Backend-agnostic: same agent on Ollama, llama.cpp or vLLM-ROCm
 
-## 4. ROCm optimization (to be filled during GPU phase)
+## 4. ROCm optimization
 
-- [ ] Baseline: model X fp16 on vLLM-ROCm, TTFT and tokens/sec (bench harness)
+### 4.1 Measurement methodology
+
+Every number below comes from `vulcan bench`, which streams three fixed
+prompts (short, medium, long) and records time-to-first-token and generation
+rate, taking the median of 5 repeats. The harness is the same code on both
+platforms, so the only variable is the backend.
+
+Two honesty caveats that shape how the numbers should be read:
+
+- **The Radeon runs are measured over an HTTPS proxy, not on the box.** The
+  instance's SSH port is not reachable from the client network, so the client
+  talks to vLLM through the Radeon Cloud spaces proxy. Median round-trip to
+  that proxy was measured at **0.216s** immediately before the run, and that
+  RTT sits inside every reported TTFT. GPU-side TTFT is therefore roughly
+  `reported - 0.216`.
+- **"Tokens/sec" is really content-deltas/sec.** The harness counts streamed
+  SSE deltas, not tokenizer tokens. Deltas can coalesce in transit, so the
+  proxied Radeon figure is a slight undercount relative to the local run.
+
+Cold start matters and is reported rather than hidden: the first two
+repetitions of each prompt carry cache-warming cost, and the run is only
+stable from roughly the third repetition. Taking the median of 5 keeps a
+single cold outlier from dominating while still not discarding it.
+
+### 4.2 Hardware comparison
+
+Same model, both platforms, so the comparison isolates hardware. See
+`bench-results/` for the raw JSON and Section 4.3 for the generated table.
+
+### 4.3 Results
+
+<!-- filled from: vulcan bench-compare bench-results/<baseline>.json bench-results/<candidate>.json -->
+
+### 4.4 Remaining sweeps
+
 - [ ] Quantization sweep: fp16 vs int8/awq, quality vs speed
 - [ ] vLLM tuning: gpu-memory-utilization, max-num-seqs, chunked prefill
 - [ ] Embedding throughput on GPU vs CPU
