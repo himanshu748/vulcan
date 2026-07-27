@@ -51,3 +51,27 @@ def run(cfg: Config, label: str, repeats: int = 3, out_dir: Path | None = None) 
     out_path = out_dir / f"{label}.json"
     out_path.write_text(json.dumps(results, indent=2))
     return results
+
+
+def compare(baseline_path: Path, candidate_path: Path) -> str:
+    """Markdown table contrasting two bench-results runs, for the ROCm
+    optimization writeup: same prompts, different backend/config, so the
+    only variable is what changed.
+    """
+    baseline = json.loads(Path(baseline_path).read_text())
+    candidate = json.loads(Path(candidate_path).read_text())
+    lines = [
+        f"| prompt | {baseline['label']} ttft (s) | {candidate['label']} ttft (s) | "
+        f"{baseline['label']} tok/s | {candidate['label']} tok/s | speedup |",
+        "|---|---|---|---|---|---|",
+    ]
+    for name in PROMPTS:
+        b = baseline["runs"].get(name, {})
+        c = candidate["runs"].get(name, {})
+        b_tps, c_tps = b.get("chunks_per_s_median"), c.get("chunks_per_s_median")
+        speedup = f"{c_tps / b_tps:.2f}x" if b_tps and c_tps else "n/a"
+        lines.append(
+            f"| {name} | {b.get('ttft_s_median', 'n/a')} | {c.get('ttft_s_median', 'n/a')} | "
+            f"{b_tps or 'n/a'} | {c_tps or 'n/a'} | {speedup} |"
+        )
+    return "\n".join(lines)

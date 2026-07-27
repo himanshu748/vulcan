@@ -14,8 +14,8 @@ from pathlib import Path
 class Config:
     base_url: str = field(default_factory=lambda: os.getenv("VULCAN_BASE_URL", "http://localhost:11434/v1"))
     api_key: str = field(default_factory=lambda: os.getenv("VULCAN_API_KEY", "local"))
-    model: str = field(default_factory=lambda: os.getenv("VULCAN_MODEL", "qwen3:8b"))
-    embed_model: str = field(default_factory=lambda: os.getenv("VULCAN_EMBED_MODEL", "nomic-embed-text"))
+    model: str = field(default_factory=lambda: os.getenv("VULCAN_MODEL", "qwen3:4b-instruct"))
+    embed_model: str = field(default_factory=lambda: os.getenv("VULCAN_EMBED_MODEL", "mxbai-embed-large"))
     data_dir: Path = field(default_factory=lambda: Path(os.getenv("VULCAN_DATA_DIR", "~/.vulcan")).expanduser())
     max_steps: int = int(os.getenv("VULCAN_MAX_STEPS", "12"))
     temperature: float = float(os.getenv("VULCAN_TEMPERATURE", "0.2"))

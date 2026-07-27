@@ -6,6 +6,8 @@ A fully local developer-productivity agent. It indexes your codebase, then reaso
 
 Your code never leaves the machine. RAG embeddings, agent reasoning and generation all run on one OpenAI-compatible endpoint you control: Ollama on a laptop during development, vLLM on ROCm for production. Switching backends is one environment variable.
 
+Model sizing matters more than backend flags on a laptop: on a 16GB machine pick a model that leaves headroom (a 4B instruct model runs a full agent turn in ~26s where a 12B thinking model swaps and takes minutes). Prefer non-thinking instruct variants for the agent loop; reasoning preambles multiply per-step latency.
+
 ## Quick start
 
 ```bash
@@ -13,8 +15,8 @@ pip install -e .
 
 # Point at any OpenAI-compatible server (default: Ollama on localhost)
 export VULCAN_BASE_URL=http://localhost:11434/v1
-export VULCAN_MODEL=qwen3:8b
-export VULCAN_EMBED_MODEL=nomic-embed-text
+export VULCAN_MODEL=qwen3:4b-instruct
+export VULCAN_EMBED_MODEL=mxbai-embed-large
 
 vulcan index ~/code/myproject        # build the semantic index
 cd ~/code/myproject

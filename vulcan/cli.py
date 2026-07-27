@@ -69,5 +69,11 @@ def bench(label: str = "local", repeats: int = 3) -> None:
     console.print(f"[green]Saved bench-results/{label}.json[/green]")
 
 
+@app.command("bench-compare")
+def bench_compare(baseline: Path, candidate: Path) -> None:
+    """Markdown comparison table between two `vulcan bench` result files."""
+    console.print(bench_mod.compare(baseline, candidate))
+
+
 if __name__ == "__main__":
     app()
