@@ -4,7 +4,21 @@ A fully local developer-productivity agent. It indexes your codebase, then reaso
 
 ## Why local
 
-Your code never leaves the machine. RAG embeddings, agent reasoning and generation all run on one OpenAI-compatible endpoint you control: Ollama on a laptop during development, vLLM on ROCm for production. Switching backends is one environment variable.
+Your code never leaves machines you control. Agent reasoning and generation run
+on one OpenAI-compatible endpoint you own: Ollama on a laptop during
+development, vLLM on ROCm for production. Switching backends is one environment
+variable.
+
+Embeddings are configured separately, and on the Radeon they are not served by
+the same process. `vllm serve Qwen/Qwen3-8B` starts with task=generate, so the
+server exposes `/v1/chat/completions` but **no `/v1/embeddings`** (verified:
+that route returns 404). Serving embeddings from vLLM needs a second process
+started with `--task embed` on an embedding model, and Radeon Cloud allows one
+active instance per account. So in the measured setup generation runs on the
+Radeon while `VULCAN_EMBED_MODEL` points at a local embedding model. Both are
+endpoints you control, and no source ever reaches a third party, but only
+generation is GPU-served in this configuration. Point `VULCAN_EMBED_MODEL` at
+an `--task embed` vLLM instance to move embeddings onto the GPU as well.
 
 Model sizing matters more than backend flags on a laptop: on a 16GB machine pick a model that leaves headroom (a 4B instruct model runs a full agent turn in ~26s where a 12B thinking model swaps and takes minutes). Prefer non-thinking instruct variants for the agent loop; reasoning preambles multiply per-step latency.
 
