@@ -22,6 +22,14 @@ export VULCAN_EMBED_MODEL="${VULCAN_EMBED_MODEL:-mxbai-embed-large}"
 
 cd "$(dirname "$0")/.."
 
+# The tape runs `vulcan` in a fresh shell, so make the project venv win.
+if [ -x ".venv/bin/vulcan" ]; then
+  export PATH="$PWD/.venv/bin:$PATH"
+elif ! command -v vulcan >/dev/null; then
+  echo "FAILED: no vulcan binary. Run: python3 -m venv .venv && .venv/bin/pip install -e ." >&2
+  exit 1
+fi
+
 echo "==> checking the Radeon endpoint"
 served=$(curl -sf -m 20 "$VULCAN_BASE_URL/models" -H "Authorization: Bearer $VULCAN_API_KEY" \
   | python3 -c 'import sys,json; print(json.load(sys.stdin)["data"][0]["id"])') || {
