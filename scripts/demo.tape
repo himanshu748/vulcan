@@ -25,7 +25,7 @@ Set TypingSpeed 25ms
 Type "# Vulcan: a codebase agent that never calls a third-party LLM API."
 Enter
 Sleep 2s
-Type "curl -s $VULCAN_BASE_URL/models -H \"Authorization: Bearer $VULCAN_API_KEY\" | python3 -c 'import sys,json; d=json.load(sys.stdin)[\"data\"][0]; print(\"served model:\", d[\"id\"], \"| ctx:\", d[\"max_model_len\"])'"
+Type "bash scripts/show-endpoint.sh"
 Enter
 Sleep 6s
 
