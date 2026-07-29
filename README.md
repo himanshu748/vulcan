@@ -1,6 +1,6 @@
 # Vulcan
 
-A fully local developer-productivity agent. It indexes your codebase, then reasons, searches, reads, runs tests and answers with cited context, with **every token generated on-device**. Built for the AMD AI DevMaster Hackathon, Track 2 (Agentic AI): local inference on AMD Radeon GPUs via ROCm.
+A private developer-productivity agent. It indexes your codebase, then reasons, searches, reads, runs tests and answers with cited context, with **every token generated on hardware you control**, never a third-party LLM API. Built for the AMD AI DevMaster Hackathon, Track 2: Development & Local Deployment of Private AI Agents. Inference runs on AMD Radeon GPUs via ROCm.
 
 ## Why local
 
@@ -21,6 +21,13 @@ generation is GPU-served in this configuration. Point `VULCAN_EMBED_MODEL` at
 an `--task embed` vLLM instance to move embeddings onto the GPU as well.
 
 Model sizing matters more than backend flags on a laptop: on a 16GB machine pick a model that leaves headroom (a 4B instruct model runs a full agent turn in ~26s where a 12B thinking model swaps and takes minutes). Prefer non-thinking instruct variants for the agent loop; reasoning preambles multiply per-step latency.
+
+## The hardware
+
+Every Radeon number in this project was measured on one instance, whose identity
+is committed verbatim in [`bench-results/radeon-device.txt`](bench-results/radeon-device.txt):
+`gfx1100` (RDNA 3, Navi 31), 48.0 GiB VRAM, 48 compute units, torch
+`2.10.0+rocm7.2.4`, HIP `7.2.53211`.
 
 ## Quick start
 
