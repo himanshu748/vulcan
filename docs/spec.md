@@ -98,10 +98,71 @@ export VULCAN_MODEL=qwen3:4b-instruct
 
 ## 3. Capabilities
 
-- Multi-turn codebase Q&A with file:line citations
+- Multi-turn codebase Q&A with file:line citations, carrying conversation
+  context between turns so a follow-up like "and which one stores memory?"
+  resolves against what was just said
 - Autonomous tool use: semantic search, file reading, grep, test runs, edits
+- Hybrid retrieval: dense cosine plus literal term overlap
 - Persistent memory across sessions per project
 - Backend-agnostic: same agent on Ollama, llama.cpp or vLLM-ROCm
+
+### 3.1 Retrieval is hybrid, and the weight was swept
+
+Dense cosine alone ranked `rag.py` fourth for "which module implements the
+semantic index", behind `cli.py` and `agent.py`, with every score bunched
+between 0.591 and 0.648. A 60-line chunk is dominated by its file header, and
+every header resembles every question. The agent then answered, correctly given
+what it was shown, that the index could not be identified.
+
+Adding literal term overlap (a match in the path counts triple) fixes the
+ranking. The weight was swept rather than chosen, over seven questions whose
+correct file is not in dispute:
+
+| lexical weight | top-1 | top-3 |
+|---|---|---|
+| 0.0, dense only | 4/7 | 6/7 |
+| 0.15 | 6/7 | 7/7 |
+| **0.25, shipped** | **6/7** | **7/7** |
+| 0.5 | 6/7 | 7/7 |
+| 1.0 | 5/7 | 7/7 |
+
+The far end degrades, so the shipped value sits inside the plateau rather than
+at its edge. `vulcan rag-bench` reproduces the table.
+
+### 3.2 Task decomposition was measured and rejected
+
+An explicit plan step was added to the protocol, so a multi-part request would
+be decomposed before any tool ran. It does not pay, on either model tested:
+
+| model | plan off | plan on | ever planned | extra wall clock |
+|---|---|---|---|---|
+| qwen3:4b-instruct | 3/4 | 3/4 | no | +18.2 s |
+| qwen3-ws:32k | 4/4 | 4/4 | no | +20.9 s |
+
+Neither model emitted a plan even once, so completion was identical while the
+instructions occupied the system prompt on every call. It ships disabled;
+`VULCAN_PLAN=1` restores it and `vulcan plan-bench` reproduces the result, the
+same treatment given to AWQ in section 4.
+
+What did improve completeness was fixing retrieval: the larger model goes from
+3/4 to 4/4 on the same questions once the right file is actually returned.
+
+### 3.3 Three defects the measurements exposed
+
+None of these were visible until something was measured end to end:
+
+- **A search observation was unbounded.** Every other tool clips its output;
+  `search_code` returned six full 60-line chunks, enough to exceed a 4096-token
+  context on its own. It surfaced as an opaque 400 mid-session.
+- **The failure was unreadable.** `raise_for_status()` on a streaming response
+  reports the status and nothing else, and reading the body afterwards raises
+  `ResponseNotRead`, so the server's explanation was unreachable exactly when it
+  was needed. The body is now read first and included in the error, which is how
+  the context overflow above was identified.
+- **A reply of `{"thought": ...}` alone was dispatched as a tool named `""`**,
+  answered `ERROR: unknown tool`, and after a few rounds the agent told the user
+  "I cannot proceed because all tools are unavailable." It now asks for a
+  corrected reply.
 
 ## 4. ROCm optimization
 
