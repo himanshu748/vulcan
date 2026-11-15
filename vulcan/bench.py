@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .config import Config
 from .privacy import mask_endpoint
-from .llm import LLM
+from .llm import LLM, InterruptedStreamError
 
 PROMPTS = {
     "short": "Explain what a race condition is in two sentences.",
@@ -36,8 +36,13 @@ def run(cfg: Config, label: str, repeats: int = 3, out_dir: Path | None = None) 
     }
     for name, prompt in PROMPTS.items():
         ttfts, tps = [], []
+        interrupted = 0
         for _ in range(repeats):
-            r = llm.chat([{"role": "user", "content": prompt}], stream=True)
+            try:
+                r = llm.chat([{"role": "user", "content": prompt}], stream=True)
+            except InterruptedStreamError:
+                interrupted += 1
+                continue
             gen_time = r.total_s - (r.ttft_s or 0)
             if r.completion_tokens and gen_time > 0:
                 tps.append(r.completion_tokens / gen_time)
@@ -47,6 +52,8 @@ def run(cfg: Config, label: str, repeats: int = 3, out_dir: Path | None = None) 
             "ttft_s_median": round(statistics.median(ttfts), 3) if ttfts else None,
             "chunks_per_s_median": round(statistics.median(tps), 1) if tps else None,
             "repeats": repeats,
+            "completed": repeats - interrupted,
+            "interrupted": interrupted,
         }
     out_dir = out_dir or Path("bench-results")
     out_dir.mkdir(exist_ok=True)
@@ -85,14 +92,22 @@ def run_concurrency(
                 pool.submit(llm.chat, [{"role": "user", "content": prompt}], True)
                 for _ in range(n)
             ]
-            outs = [f.result() for f in futures]
+            outs = []
+            interrupted = 0
+            for future in futures:
+                try:
+                    outs.append(future.result())
+                except InterruptedStreamError:
+                    interrupted += 1
         wall = time.perf_counter() - start
         total_chunks = sum(o.completion_tokens for o in outs)
         results["runs"][f"concurrency_{n}"] = {
             "requests": n,
+            "completed": len(outs),
+            "interrupted": interrupted,
             "wall_s": round(wall, 2),
-            "aggregate_chunks_per_s": round(total_chunks / wall, 1) if wall > 0 else None,
-            "per_request_chunks_per_s": round(total_chunks / wall / n, 1) if wall > 0 else None,
+            "aggregate_chunks_per_s": round(total_chunks / wall, 1) if outs and wall > 0 else None,
+            "per_request_chunks_per_s": round(total_chunks / wall / n, 1) if outs and wall > 0 else None,
             "ttft_s_median": round(statistics.median([o.ttft_s for o in outs if o.ttft_s]), 3)
             if any(o.ttft_s for o in outs)
             else None,
@@ -133,14 +148,21 @@ def run_prefill(
         body = " ".join(filler[i % len(filler)] for i in range(n_words))
         prompt = f"Here is code:\n{body}\nReply with the single word OK."
         ttfts = []
+        interrupted = 0
         for _ in range(3):
-            r = llm.chat([{"role": "user", "content": prompt}], stream=True)
+            try:
+                r = llm.chat([{"role": "user", "content": prompt}], stream=True)
+            except InterruptedStreamError:
+                interrupted += 1
+                continue
             if r.ttft_s:
                 ttfts.append(r.ttft_s)
         results["runs"][f"prefill_{n_words}w"] = {
             "input_words": n_words,
             "ttft_s_median": round(statistics.median(ttfts), 3) if ttfts else None,
             "repeats": 3,
+            "completed": 3 - interrupted,
+            "interrupted": interrupted,
         }
     out_dir = out_dir or Path("bench-results")
     out_dir.mkdir(exist_ok=True)
