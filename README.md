@@ -139,6 +139,11 @@ Every value is read from the environment; nothing is hardcoded. Copy
 ## Tests
 
 ```bash
-pip install -e ".[dev]"
-pytest
+python -m pip install -e ".[dev]"
+python -m pytest -q
 ```
+
+The CPU tests workflow runs these commands on Linux with Python 3.10, 3.11,
+3.12 and 3.13 for every pull request and push to main. Tests use synthetic
+fixtures and mocked inference; no model server, GPU, provider key or repository
+secret is needed. GPU measurements remain manual benchmark commands.
