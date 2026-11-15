@@ -118,6 +118,19 @@ A backend is also required, one of:
 - **Ollama** for local development, serving both chat and embeddings
 - **vLLM on ROCm** for GPU generation, plus a local embeddings endpoint (see above)
 
+## Interrupted responses
+
+If a streaming connection fails after output has begun, the client raises
+an InterruptedStreamError (a RuntimeError), retaining the partial text in
+its partial_text attribute and the transport error as its cause. It does not
+retry that response automatically. The agent stops before interpreting it as
+a tool call. Failures before any output still use the existing bounded retries.
+
+Decode, concurrency and prefill benchmark rows record completed and interrupted
+sample counts. Interrupted responses contribute neither throughput nor latency
+samples; an all-interrupted row has no rate or median. These CPU regression
+tests use synthetic HTTP streams, without a model server or provider calls.
+
 ## Environment configuration
 
 Every value is read from the environment; nothing is hardcoded. Copy

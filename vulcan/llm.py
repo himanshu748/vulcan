@@ -21,6 +21,14 @@ class ChatResult:
     total_s: float
 
 
+class InterruptedStreamError(RuntimeError):
+    """Output arrived before the transport failed; never automatically retry it."""
+
+    def __init__(self, partial_text: str):
+        self.partial_text = partial_text
+        super().__init__("LLM stream interrupted; response is incomplete")
+
+
 class LLM:
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -111,12 +119,13 @@ class LLM:
                             ttft = time.perf_counter() - start
                         chunks.append(piece)
                         n_tokens += 1
-        except httpx.TransportError:
+        except httpx.TransportError as exc:
             # Nothing delivered yet, so the caller can safely start over.
             if not chunks:
                 raise
-            # Content already streamed. Retrying would duplicate it, so return
-            # the truncated answer rather than losing the whole turn.
+            # The caller can choose how to surface partial text, but it must
+            # not be parsed as a complete tool call or retried automatically.
+            raise InterruptedStreamError("".join(chunks)) from exc
         return ChatResult(
             text="".join(chunks),
             prompt_tokens=0,
